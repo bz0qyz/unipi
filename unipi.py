@@ -81,7 +81,7 @@ systemd_unit_file = systemd_unit_path + '/' + app_name + '.service'
 unit_template = Template(
 '''[Unit]
 Description={{app_description}}
-After=network.target
+After=unifi.service
 
 [Service]
 User={{user}}
@@ -90,12 +90,11 @@ KillMode=process
 PIDFile={{pid_file}}
 Type=forking
 NotifyAccess=all
-WorkingDirectory={{app_path}}
 ExecStart=/usr/bin/python3 {{daemon}} --daemon --pid-file {{pid_file}} --config-file={{config_file}} --unifi-access-file={{access_file}}
 StandardOutput=syslog+console
 SyslogIdentifier={{app_name}}
 SyslogFacility={{syslog_facility}}
-After=unifi.service
+
 
 [Install]
 WantedBy=multi-user.target'''
