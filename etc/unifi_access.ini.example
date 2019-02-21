@@ -2,3 +2,4 @@
 port = 8443
 username = unipi
 password = superstrongpasswd
+proto = https
