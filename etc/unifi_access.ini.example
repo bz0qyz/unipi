@@ -1,0 +1,4 @@
+[unifi.local]
+port = 8443
+username = unipi
+password = superstrongpasswd

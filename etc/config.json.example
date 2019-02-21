@@ -1,0 +1,16 @@
+{
+"global": {
+	"logging": {
+	  "objname-prefix": "com.64byte",
+	  "syslog_facility": "local7"
+	},
+	"service": {
+	  "runas": { "user": "root", "group": "root" }
+	},
+	"pid_file_dir": "/tmp",
+	"gpio_pin_led": 16,
+	"gpio_pin_shutdown": 22,
+	"shutdown_press_timeout": 5,
+	"status_query_threshold": 10
+  }
+}
