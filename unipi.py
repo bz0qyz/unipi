@@ -371,10 +371,12 @@ def led_toggle(gpio_pin_led,status=True):
     if status and GPIO.input(gpio_pin_led) == GPIO.LOW:
         ## Turn On the LED
         #print("LED on")
+        objlog.info("INFO: Status LED Turned on.")
         GPIO.output(gpio_pin_led,GPIO.HIGH)
     if not status and GPIO.input(gpio_pin_led) == GPIO.HIGH:
         ## Turn Off the LED
         #print("LED off")
+        objlog.info("INFO: Status LED Turned off.")
         GPIO.output(gpio_pin_led,GPIO.LOW)
 
 def led_setting(unifi):
