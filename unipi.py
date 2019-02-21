@@ -340,6 +340,19 @@ def unifi_get_settings(unifi):
         url = "https://{}:{}/api/s/default/rest/setting".format(unifi['hostname'], unifi['port'])
         try:
             req = http_session.get(url,verify=False,timeout=5.0)
+
+            if req.status_code == requests.codes.unauthorized:
+                unifi_login(unifi)
+                unifi_get_settings(unifi)
+            else:
+                unifi['last_poll'] = time.time()
+                unifi_settings = json.loads(req.content.decode("utf-8"))
+                for section in unifi_settings['data']:
+                    if section['key'] == "mgmt":
+                        if verbose:
+                            print("Unifi site LED enabled: {}".format(section['led_enabled']))
+                        unifi['led_enabled'] = section['led_enabled']
+                return unifi['led_enabled']
         except:
             errmsg = "ERROR: Unifi connection failed. Sleeping for 30 seconds before a retry."
             if verbose:
@@ -348,18 +361,7 @@ def unifi_get_settings(unifi):
             errmsg = None
             time.sleep(30)
             unifi_get_settings(unifi)
-        if req.status_code == requests.codes.unauthorized:
-            unifi_login(unifi)
-            unifi_get_settings(unifi)
-        else:
-            unifi['last_poll'] = time.time()
-            unifi_settings = json.loads(req.content.decode("utf-8"))
-            for section in unifi_settings['data']:
-                if section['key'] == "mgmt":
-                    if verbose:
-                        print("Unifi site LED enabled: {}".format(section['led_enabled']))
-                    unifi['led_enabled'] = section['led_enabled']
-            return unifi['led_enabled']
+
 
     else:
         return False
