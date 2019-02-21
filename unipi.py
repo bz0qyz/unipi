@@ -54,7 +54,7 @@ main_loop_timeout = 5
 ## Name of this application
 app_name = 'unipi'
 ## Version of this application
-app_version = '1.0.0'
+app_version = '1.0.1'
 ## Description of this application
 app_description = 'Daemon for controlling an LED for a unifi controller running on a Raspberry Pi.'
 ## Dynamic path to this application directory
@@ -69,7 +69,7 @@ pid_file = tempfile.gettempdir() + os.sep + app_name + '.pid'
 
 ## syslog facility - overide in the config file
 default_syslog_facility='local0'
-default_unifi_host = 'unifi.local'
+default_unifi_host = 'localhost'
 default_unifi_port = 8443
 default_shutdown_press_timeout = 10
 default_led_enabled = False
