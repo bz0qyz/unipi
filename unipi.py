@@ -95,6 +95,7 @@ ExecStart=/usr/bin/python3 {{daemon}} --daemon --pid-file {{pid_file}} --config-
 StandardOutput=syslog+console
 SyslogIdentifier={{app_name}}
 SyslogFacility={{syslog_facility}}
+After=unifi.service
 
 [Install]
 WantedBy=multi-user.target'''
@@ -315,7 +316,7 @@ def unifi_login(unifi):
     headers = {"Content-Type": "application/json;charset=UTF-8"}
     url = "https://{}:{}/api/login".format(unifi['hostname'], unifi['port'])
 
-    req = http_session.post(url,headers=headers,data=json.dumps(auth_dic),verify=False)
+    req = http_session.post(url,headers=headers,data=json.dumps(auth_dic),verify=False,timeout=5.0)
 
     if req.status_code != requests.codes.ok:
         unifi['do_poll'] = False
@@ -325,7 +326,8 @@ def unifi_login(unifi):
         return False
     else:
         if verbose:
-            print("Unifi Authentication successful.")
+            print("DEBUG: Unifi Authentication successful.")
+        objlog.info("INFO: Unifi Authentication successful.")
         return True
 
 
@@ -337,7 +339,16 @@ def unifi_get_settings(unifi):
             print("checking Unifi site settings")
         ## Query Site settings
         url = "https://{}:{}/api/s/default/rest/setting".format(unifi['hostname'], unifi['port'])
-        req = http_session.get(url,verify=False)
+        try:
+            req = http_session.get(url,verify=False,timeout=5.0)
+        except:
+            errmsg = "ERROR: Unifi connection failed. Sleeping for 30 seconds before a retry."
+            if verbose:
+                print(errmsg)
+            objlog.error(errmsg)
+            errmsg = None
+            time.sleep(30)
+            unifi_get_settings(unifi)
         if req.status_code == requests.codes.unauthorized:
             unifi_login(unifi)
             unifi_get_settings(unifi)
