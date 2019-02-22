@@ -15,11 +15,11 @@ This code is distributed with a **use at your own risk** warning. The author is 
 - Systemd
 - Python Version 3.x
 - Python Modules (extra):
- - RPi
- - requests
- - systemd
- - pathlib
- - jinja2
+  - RPi
+  - requests
+  - systemd
+  - pathlib
+  - jinja2
 
  Requirements can be installed with the following commands:
 
@@ -42,12 +42,12 @@ The automated install will do the following:
 ### Configuration
 You will need to edit the configuration files to match your installation and GPIO pins.
 - `[prefix]/etc/unipi/config.json`
- - **gpio_pin_led:** BCM pin ID for the status LED.
- - **gpio_pin_shutdown:** BCM pin ID for the shutdown button.
- - **shutdown_press_timeout:** Number of seconds to press the button before shutting down the operating system.
- - **status_query_interval:** Number of seconds between polling the Unifi API for the LED status.
+  - **gpio_pin_led:** BCM pin ID for the status LED.
+  - **gpio_pin_shutdown:** BCM pin ID for the shutdown button.
+  - **shutdown_press_timeout:** Number of seconds to press the button before shutting down the operating system.
+  - **status_query_interval:** Number of seconds between polling the Unifi API for the LED status.
 - `[prefix]/etc/unipi/unifi_access.ini`
- - Add the hostname, username and password to access your controller. I recommend that you create a read-only account on your controller for this. __On first run, the application will encrypt the password and write it back to this file__.
+  - Add the hostname, username and password to access your controller. I recommend that you create a read-only account on your controller for this. __On first run, the application will encrypt the password and write it back to this file__.
 
 ##### Password Encryption
 There is a simple encryption method used to obfuscate the Unifi password stored in the `unifi_access.ini` file. The encryption key is generated from the operating system UUID and is therefore not very secure. This does mean that the access file cannot be copied between operating systems without re-generating the password encryption.
