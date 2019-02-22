@@ -2,7 +2,7 @@
 """
 unipi.py
 
-Created by Russell Cook<rcook@64byte.com> on 2019-02-20.
+Created by Russell Cook<bz0qyz@protonmail.com> on 2019-02-20.
 License: The Unlicense <https://unlicense.org>
 https://github.com/bz0qyz
 
@@ -29,9 +29,11 @@ import json
 import argparse
 import configparser
 
+
 ## Daemon modules
 import subprocess
 from subprocess import Popen, PIPE
+
 ## logging modules
 import logging
 from systemd import journal
@@ -46,6 +48,11 @@ from pprint import pprint
 from pathlib import Path
 import RPi.GPIO as GPIO
 
+## Encryption modules
+import base64
+import uuid
+from cryptography.fernet import Fernet
+
 ###
 ## Global Static Variables
 ###
@@ -55,20 +62,23 @@ main_loop_interval = 5
 ## Name of this application
 app_name = 'unipi'
 ## Version of this application
-app_version = '1.0.3'
+app_version = '1.1.0'
 ## Description of this application
 app_description = 'Daemon for controlling a shutdown switch and an LED for a unifi controller running on a Raspberry Pi.'
 
 ## Dictionary of all default Variables
 defaults = {}
 
-## Dynamic path to this application directory
+## Dynamic path to this application directory. Primarily used for testing, not for daemon use.
 defaults['app_path'] = os.path.dirname(os.path.realpath(__file__))
 defaults['config_path'] = defaults['app_path'] + os.sep + 'etc'
 
+## A string to prepend to a password that is stored in an encrypted format
+defaults['pw_enc_prefix'] = 'enc::'
+
 ## Application configuration file in json format
 defaults['config_file'] = defaults['config_path'] + os.sep + 'config.json'
-## Defaut application settings
+## Defaut application settings. Can be changed by arguments and the 'config_file'
 defaults['gpio_pin_led'] = 20
 defaults['gpio_pin_shutdown'] = 16
 defaults['shutdown_press_timeout'] = 5
@@ -76,10 +86,12 @@ defaults['status_query_interval'] = 30
 
 ## Unifi credentials file in ini format
 defaults['unifi_access_file'] = defaults['config_path'] + os.sep + "unifi_access.ini"
-## Defaut Unifi connection settings
+## Defaut Unifi connection settings. Can be changed by arguments and the 'unifi_access_file'
 defaults['unifi_host'] = 'localhost'
 defaults['unifi_port'] = 8443
 defaults['unifi_proto'] = 'https'
+defaults['unifi_uri_settings'] = '/api/s/default/rest/setting'
+defaults['unifi_uri_auth'] = '/api/login'
 
 ## Default pid file
 defaults['pid_file'] = tempfile.gettempdir() + os.sep + app_name + '.pid'
@@ -88,9 +100,7 @@ defaults['pid_file'] = tempfile.gettempdir() + os.sep + app_name + '.pid'
 defaults['syslog_id'] = 'com.64byte.' + app_name
 defaults['syslog_facility'] = 'local0'
 
-
-
-
+## default LED status
 defaults['led_enabled'] = False
 
 ## Installation Variables
@@ -119,7 +129,6 @@ ExecStart=/usr/bin/python3 {{daemon}} --daemon --pid-file {{pid_file}} --config-
 StandardOutput=syslog+console
 SyslogIdentifier={{app_name}}
 SyslogFacility={{syslog_facility}}
-
 
 [Install]
 WantedBy=multi-user.target'''
@@ -172,7 +181,7 @@ def show_version():
     sys.exit(0)
 
 
-def signal_handler(signal, frame):
+def __signal_handler(signal, frame):
     objlog.info('Shutting down ' + app_name)
     pid_file_ops(args.pid_file)
     sys.exit(0)
@@ -184,7 +193,8 @@ def fatal(msg):
 
     sys.exit(1)
 
-def system_cmd(cmd=''):
+
+def __system_cmd(cmd=''):
     proc = subprocess.Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, shell=True)
     out, err = proc.communicate()
     if proc.returncode > 0:
@@ -192,7 +202,7 @@ def system_cmd(cmd=''):
         return False
     else:
         return True
-def is_root(die=False):
+def __is_root(die=False):
 	## Verify that we are running with root privileges.
 	if os.geteuid() != 0:
 		if die:
@@ -204,11 +214,11 @@ def is_root(die=False):
 ## Service Uninstaller Function
 ###
 def uninstall_service(installvars):
-	is_root(True)
-	system_cmd('systemctl stop ' + app_name + '.service')
-	if system_cmd('systemctl disable ' + app_name + '.service'):
+	__is_root(True)
+	__system_cmd('systemctl stop ' + app_name + '.service')
+	if __system_cmd('systemctl disable ' + app_name + '.service'):
 		os.remove(systemd_unit_file)
-		system_cmd('systemctl daemon-reload')
+		__system_cmd('systemctl daemon-reload')
 		print("Successfully removed the systemd unit file and reloaded systemd")
 		exit(0)
 	else:
@@ -218,7 +228,7 @@ def uninstall_service(installvars):
 ## Service Installer Function
 ###
 def install_service(installvars):
-    is_root(True)
+    __is_root(True)
 
     ## Create some re-usable variables for the installed files
     config_file = args.config_file.split(os.sep)[-1]
@@ -234,18 +244,18 @@ def install_service(installvars):
 
     ## Copyt Files to permanent installation locations
     print("Creating configuration directory: {}".format(install['config_dir']))
-    system_cmd('[ ! -d {} ] && mkdir -p {}'.format(install['config_dir'],install['config_dir']))
+    __system_cmd('[ ! -d {} ] && mkdir -p {}'.format(install['config_dir'],install['config_dir']))
 
     print("Installing example configuration files...")
     print("File: {}".format(install['config_dir'] + os.sep + config_file ))
-    system_cmd('install -m 0600 -o root -g root {} {}'.format(installvars['example_config_file'], install['config_dir'] + os.sep + config_file))
+    __system_cmd('install -m 0600 -o root -g root {} {}'.format(installvars['example_config_file'], install['config_dir'] + os.sep + config_file))
 
     print("File: {}".format(install['config_dir'] + os.sep + unifi_access_file ))
-    system_cmd('install -m 0600 -o root -g root {} {}'.format(installvars['example_unifi_access_file'], install['config_dir'] + os.sep + unifi_access_file))
+    __system_cmd('install -m 0600 -o root -g root {} {}'.format(installvars['example_unifi_access_file'], install['config_dir'] + os.sep + unifi_access_file))
 
     print("Installing application...")
-    system_cmd('[ ! -d {} ] && mkdir -p {}'.format(install['bin_dir'],install['bin_dir']))
-    system_cmd('install -m 0755 -o root -g root {} {}'.format(__file__,install['daemon']))
+    __system_cmd('[ ! -d {} ] && mkdir -p {}'.format(install['bin_dir'],install['bin_dir']))
+    __system_cmd('install -m 0755 -o root -g root {} {}'.format(__file__,install['daemon']))
 
     ## Write systemd Unit File
     unit_contents = installvars['unit_template'].render(
@@ -263,9 +273,9 @@ def install_service(installvars):
     fh.write(unit_contents)
     fh.close()
 
-    if system_cmd('systemctl daemon-reload'):
-        system_cmd('systemctl enable ' + app_name + '.service')
-        #system_cmd('systemctl start ' + app_name + '.service')
+    if __system_cmd('systemctl daemon-reload'):
+        __system_cmd('systemctl enable ' + app_name + '.service')
+        #__system_cmd('systemctl start ' + app_name + '.service')
         print("Successfully installed the systemd unit file and reloaded systemd")
         print("Edit the configuration files in '{}' before starting the service.".format(install['config_dir']))
         print("Logging to journal. Use command: 'journalctl -ef --unit={}' to view service logs".format(app_name))
@@ -295,7 +305,7 @@ def pid_file_ops(pid_file,pid=None):
 
 
 ###
-## Load Global Config file
+## Load Application Config file
 ###
 def load_config(config_file):
 	global verbose
@@ -316,18 +326,61 @@ def load_config(config_file):
 ###
 def load_access(unifi_access_file):
     global verbose
-    unifi = configparser.ConfigParser()
+    unifi_config = configparser.ConfigParser()
     if os.path.isfile(unifi_access_file):
         if verbose:
             print("DEBUG: Unifi Access File = " + unifi_access_file)
         try:
-            unifi.read(unifi_access_file)
+            unifi_config.read_file(open(unifi_access_file))
+
+            ## Encrypt the password if it's not encrypted
+            secret = unifi_config.get(args.unifi_host,'password')
+            if not secret.startswith(defaults['pw_enc_prefix']):
+                msg = "INFO: detected unencrypted Unifi password. Encrypting password."
+                if verbose:
+                    print(msg)
+                objlog.info(msg)
+                try:
+                    ## Encrypt the password
+                    enc_password = defaults['pw_enc_prefix'] + __encrypt_pw(secret)
+                    ## Save the encrypted string to the unifi_access_file
+                    unifi_config.set(args.unifi_host,'password',enc_password)
+                    unifi_config.write(open(unifi_access_file,'w'))
+                except:
+                    fatal("Error saving Unifi Access ini file: {}".format(unifi_access_file) )
         except:
             fatal("Error loading Unifi Access ini file: {}".format(unifi_access_file) )
     else:
         fatal("Unifi Access file not found (" + config_file + ")")
-    return unifi
+    return unifi_config
 
+###
+## Password Encryption
+###
+def __get_crypto_key():
+    ## Generate a crypto key from this computer's uuid and pad it to 32 bytes
+    ## This is more of an obfuscated way to store the password so it's not in plain text
+    return  base64.urlsafe_b64encode(uuid.UUID(int=uuid.getnode()).bytes.ljust(32,b"\x0f"))
+
+
+def __encrypt_pw(passin=''):
+    key = __get_crypto_key()
+    cipher_suite = Fernet(key)
+    cipher_text = cipher_suite.encrypt(passin.encode())
+    return cipher_text.decode()
+
+def __decrypt_pw(cipherin=''):
+
+    key = __get_crypto_key()
+    cipher_suite = Fernet(key)
+    try:
+        plain_text = cipher_suite.decrypt(cipherin.encode())
+        return plain_text.decode()
+    except:
+        if verbose:
+            print("ERROR: Unifi controller password decryption failed")
+        objlog.error("ERROR: Unifi controller password decryption failed")
+        return False
 
 ###
 ############ CORE FUNCTIONALITY FUNCTIONS ##################
@@ -344,14 +397,25 @@ def cleanup(gpio_pin_led):
 ###
 ## Unifi Controller Authentication
 ###
-def unifi_login(unifi):
+def __unifi_login(unifi):
     global http_session
 
-    auth_dic={"username": unifi['username'],"password": unifi['password'], "remember": "true", "strict": "true"}
+    ## Decrypt the password if it's encrypted
+    if unifi['password'].startswith(defaults['pw_enc_prefix']):
+        unsecure_pw =  __decrypt_pw(unifi['password'].lstrip(defaults['pw_enc_prefix']))
+    else:
+        ## In theory, this should never happen
+        unsecure_pw = unifi['password']
+
+
+    auth_dic={"username": unifi['username'],"password": unsecure_pw, "remember": "true", "strict": "true"}
     headers = {"Content-Type": "application/json;charset=UTF-8"}
-    url = "{}}://{}:{}/api/login".format(unifi['proto'],unifi['hostname'], unifi['port'])
+    url = "{}://{}:{}{}".format(unifi['proto'],unifi['hostname'], unifi['port'], unifi['unifi_uri_auth'])
 
     req = http_session.post(url,headers=headers,data=json.dumps(auth_dic),verify=False,timeout=5.0)
+
+    ## Clear the unsecure_pw from memory
+    unsecure_pw = None
 
     if req.status_code != requests.codes.ok:
         unifi['do_poll'] = False
@@ -368,20 +432,20 @@ def unifi_login(unifi):
 ###
 ## Unifi Controller Query for Site Settings
 ###
-def unifi_get_settings(unifi):
+def __unifi_get_settings(unifi):
     global http_session
 
     if unifi['do_poll']:
         if verbose:
             print("checking Unifi site settings")
         ## Query Site settings
-        url = "{}://{}:{}/api/s/default/rest/setting".format(unifi['proto'],unifi['hostname'], unifi['port'])
+        url = "{}://{}:{}{}".format(unifi['proto'],unifi['hostname'], unifi['port'], unifi['unifi_uri_settings'])
         try:
             req = http_session.get(url,verify=False,timeout=5.0)
 
             if req.status_code == requests.codes.unauthorized:
-                unifi_login(unifi)
-                unifi_get_settings(unifi)
+                __unifi_login(unifi)
+                __unifi_get_settings(unifi)
             else:
                 unifi['last_poll'] = time.time()
                 unifi_settings = json.loads(req.content.decode("utf-8"))
@@ -398,7 +462,7 @@ def unifi_get_settings(unifi):
             objlog.error(errmsg)
             errmsg = None
             time.sleep(30)
-            unifi_get_settings(unifi)
+            __unifi_get_settings(unifi)
 
 
     else:
@@ -428,7 +492,7 @@ def led_setting(unifi):
     #print("Difference: {}".format(poll_age))
 
     if unifi['last_poll'] == 0 or poll_age >= config['global']['status_query_interval']:
-        return unifi_get_settings(unifi)
+        return __unifi_get_settings(unifi)
     else:
         return unifi['led_enabled']
 
@@ -449,15 +513,15 @@ def shutdown_system(gpio_pin_led):
     objlog.info("INFO: Button pressed for specified duration. Shutting Down System.")
     sleep(1)
     ## Execute the shutdown command
-    system_cmd("sudo nohup shutdown -h now")
+    __system_cmd("sudo nohup shutdown -h now")
     exit()
 
 
 ###
-############ MAIN FUNCTION ##################
+######################## MAIN FUNCTION ##############################
 ###
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGINT, __signal_handler)
     if args.version:
         show_version()
 
@@ -465,6 +529,26 @@ if __name__ == "__main__":
         print('DEBUG: Arguments: ')
         pprint(args)
         print('verbose is:', str(verbose))
+
+
+    ###
+    ## Setup the global logging object
+    ###
+    try:
+        logger_name = config['global']['logging']['objname-prefix'] + '.' + app_name
+    except:
+        logger_name = defaults['syslog_id']
+    objlog = logging.getLogger(logger_name)
+    if verbose:
+        objlog.setLevel(logging.DEBUG)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+    else:
+        objlog.setLevel(logging.INFO)
+        logging.getLogger("urllib3").setLevel(logging.INFO)
+
+    objlog.addHandler(journal.JournaldLogHandler())
+    objlog.info('Starting up ' + app_name)
+
 
     ###
     ## Process install related arguments
@@ -479,7 +563,11 @@ if __name__ == "__main__":
     ###
     ## Load configuration Files
     ###
+
+    ## Main application configuration
     config = load_config(args.config_file)
+
+    ## Unifi Connection configuration
     unifi_config = load_access(args.unifi_access_file)
     unifi = {"hostname": args.unifi_host, "port": args.unifi_port, "proto": args.unifi_proto, "username": "", "password": "","led_enabled": False, "last_poll": 0, "do_poll": True}
     try:
@@ -497,6 +585,16 @@ if __name__ == "__main__":
         unifi['proto'] = unifi_config.get(args.unifi_host,'proto')
     except:
         pass
+    ## Override Settings URI from unifi_access_file
+    try:
+        unifi['unifi_uri_settings'] = unifi_config.get(args.unifi_host,'unifi_uri_settings')
+    except:
+        unifi['unifi_uri_settings'] = defaults['unifi_uri_settings']
+    ## Override Authentication URI from unifi_access_file
+    try:
+        unifi['unifi_uri_auth'] = unifi_config.get(args.unifi_host,'unifi_uri_auth')
+    except:
+        unifi['unifi_uri_auth'] = defaults['unifi_uri_auth']
 
     if verbose:
         print("DEBUG: connecting to unifi controller with the following settings")
@@ -527,24 +625,6 @@ if __name__ == "__main__":
             pid_file_ops(args.pid_file,pid)
             sys.exit(0)
 
-
-    ###
-    ## Setup the global logging object
-    ###
-    try:
-        logger_name = config['global']['logging']['objname-prefix'] + '.' + app_name
-    except:
-        logger_name = defaults['syslog_id']
-    objlog = logging.getLogger(logger_name)
-    if verbose:
-        objlog.setLevel(logging.DEBUG)
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-    else:
-        objlog.setLevel(logging.INFO)
-        logging.getLogger("urllib3").setLevel(logging.INFO)
-
-    objlog.addHandler(journal.JournaldLogHandler())
-    objlog.info('Starting up ' + app_name)
 
     ###
     ## Setup the application run variables

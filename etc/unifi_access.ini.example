@@ -1,5 +1,38 @@
+################################ HELP #######################################
+# Add a section for each unifi controller
+# The Section title is the hostname or IP address of the Unifi controller.
+# SETTINGS:
+# proto:
+#   - Description: The protocol for connecting to the Unifi controller API
+#   - Required: no
+#   - Possible values: http | https
+#   - Default value: https
+#
+# port:
+#   - Description: The port for connecting to the Unifi controller API
+#   - Required: no
+#   - Default value: 8443
+#
+# username:
+#   - Description: The username for connecting to the Unifi controller API
+#   - Required: yes
+#   - Default value: NONE
+#
+# password:
+#   - Description: The password for connecting to the Unifi controller API
+#   - This value will be replaced with an encrypted version on the first run.
+#   - Required: yes
+#   - Default value: NONE
+#
+# EXAMPLE:
+# [localhost]
+# proto = https
+# port = 8443
+# username = admin
+# password = plaintext-password
+#############################################################################
 [localhost]
+proto = https
 port = 8443
 username = unipi
 password = superstrongpasswd
-proto = https
