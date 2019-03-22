@@ -2,7 +2,7 @@
 """
 unipi.py
 
-Created by Russell Cook<bz0qyz@protonmail.com> on 2019-02-20.
+Created by Russ Cook (aka:bz0qyz) on 2019-02-20.
 License: The Unlicense <https://unlicense.org>
 https://github.com/bz0qyz
 
