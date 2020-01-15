@@ -15,7 +15,7 @@ This code is distributed with a **use at your own risk** warning. The author is 
 - Systemd
 - Python Version 3.x
 - Python Modules (extra):
-  - RPi
+  - RPi.GPIO
   - requests
   - systemd
   - pathlib
@@ -25,7 +25,7 @@ This code is distributed with a **use at your own risk** warning. The author is 
 
  ```bash
 sudo apt install -y python3 python3-pip libsystemd-dev
-sudo pip3 install RPi requests systemd pathlib jinja2
+sudo pip install --upgrade -r requirements.txt
  ```
 
 ## Usage
